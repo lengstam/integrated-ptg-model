@@ -3728,10 +3728,6 @@ def p2g_wwtp3(
     Also including a linearized part-load efficiency and on/standby/off modes for
     the electrolyzer as well as startup losses for electrolysis and methanation.
     Using linearization parameters as proposed in Wirtz et al. 2021"""
-    # Now: lowest value in each interval has the optimal efficiency it seems
-    # What about the start-up time? Can we ignore this since it is very short with PEM?
-    # Should startup and standby costs be based on spot price or a constant price?
-    # Methanation ignored since it is based on CO2 availability
 
     #Hourly hydrogen demand (from CO2 availability)    
     h2_demand = h2_dem.flatten().tolist()
@@ -3769,7 +3765,6 @@ def p2g_wwtp3(
     standby_el = []
     meth_el1 = []
     comp_el = []
-    # elz1 = []
     # Part-load variables
     # Load
     e10 = []
@@ -3794,8 +3789,8 @@ def p2g_wwtp3(
     lambda90 = []
     lambda100 = []
 
-    # Linearization parameters (see "Linearized efficiency" Excel)
-    # gradient
+    # Linearization parameters
+    # Gradient
     k10 = k_values[0]
     k20 = k_values[1]
     k30 = k_values[2]
@@ -3806,7 +3801,7 @@ def p2g_wwtp3(
     k80 = k_values[7]
     k90 = k_values[8]
     k100 = k_values[9]
-    # m-value
+    # M-value
     m10 = m_values[0]
     m20 = m_values[1]
     m30 = m_values[2]
@@ -3821,7 +3816,6 @@ def p2g_wwtp3(
     for i in range(len(grid)):
         # Electrolyzer operation
         elz.append(plp.LpVariable("elz_{}".format(i), 0, elz_max))
-        # elz1.append(plp.LpVariable("elz1_{}".format(i), 0, None)) #an independent copy
         elz_mode.append(plp.LpVariable("elz_mode_{}".format(i), 0, 1, plp.LpInteger))
         elz_start.append(plp.LpVariable("elz_start_{}".format(i), 0, 1, plp.LpInteger))
         elz_stop.append(plp.LpVariable("elz_stop_{}".format(i), 0, 1, plp.LpInteger))
@@ -3848,10 +3842,10 @@ def p2g_wwtp3(
         o2_prod.append(plp.LpVariable("o2_prod_{}".format(i), 0, None))
         o2_use.append(plp.LpVariable("o2_use_{}".format(i), 0, None))
         # Heat production and utilization
-        elz_heat.append(plp.LpVariable("elz_heat_{}".format(i), 0, None))
-        heat_use.append(plp.LpVariable("heat_use_{}".format(i), 0, None))
-        heat_income.append(plp.LpVariable("heat_income_{}".format(i), 0, None))
-        elz_heat_demand.append(plp.LpVariable("elz_heat_demand_{}".format(i), 0, None))
+        elz_heat.append(plp.LpVariable("elz_heat_{}".format(i), 0, None)) # Heat from electrolyzer
+        heat_use.append(plp.LpVariable("heat_use_{}".format(i), 0, None)) # Utilized heat
+        heat_income.append(plp.LpVariable("heat_income_{}".format(i), 0, None)) # Income from heat use
+        elz_heat_demand.append(plp.LpVariable("elz_heat_demand_{}".format(i), 0, None)) # 
         ehd.append(plp.LpVariable("ehd_{}".format(i), 0, 1, plp.LpInteger))
         #Battery
         bat.append(plp.LpVariable("bat_{}".format(i), 0, bat_cap))
@@ -3861,16 +3855,16 @@ def p2g_wwtp3(
         
         # Part-load variables
         # Load
-        e10.append(plp.LpVariable("e10_{}".format(i), 0, None))
-        e20.append(plp.LpVariable("e20_{}".format(i), 0, None))
-        e30.append(plp.LpVariable("e30_{}".format(i), 0, None))
-        e40.append(plp.LpVariable("e40_{}".format(i), 0, None))
-        e50.append(plp.LpVariable("e50_{}".format(i), 0, None))
-        e60.append(plp.LpVariable("e60_{}".format(i), 0, None))
-        e70.append(plp.LpVariable("e70_{}".format(i), 0, None))
-        e80.append(plp.LpVariable("e80_{}".format(i), 0, None))
-        e90.append(plp.LpVariable("e90_{}".format(i), 0, None))
-        e100.append(plp.LpVariable("e100_{}".format(i), 0, None))
+        e10.append(plp.LpVariable("e10_{}".format(i), 0, None)) # Load between 0 and 10 %
+        e20.append(plp.LpVariable("e20_{}".format(i), 0, None)) # Load between 10 and 20 %
+        e30.append(plp.LpVariable("e30_{}".format(i), 0, None)) # Load between 20 and 30 %
+        e40.append(plp.LpVariable("e40_{}".format(i), 0, None)) # Load between 30 and 40 %
+        e50.append(plp.LpVariable("e50_{}".format(i), 0, None)) # Load between 40 and 50 %
+        e60.append(plp.LpVariable("e60_{}".format(i), 0, None)) # Load between 50 and 60 %
+        e70.append(plp.LpVariable("e70_{}".format(i), 0, None)) # Load between 60 and 70 %
+        e80.append(plp.LpVariable("e80_{}".format(i), 0, None)) # Load between 70 and 80 %
+        e90.append(plp.LpVariable("e90_{}".format(i), 0, None)) # Load between 80 and 90 %
+        e100.append(plp.LpVariable("e100_{}".format(i), 0, None)) # Load between 90 and 100 %
         # On/off
         lambda10.append(plp.LpVariable(
             "lambda10_{}".format(i), 0, 1, plp.LpInteger))
@@ -3898,7 +3892,7 @@ def p2g_wwtp3(
 
     # Constraints
     for i in range(len(grid)):
-        # defining electricity supply
+        # Defining electricity supply
         prob += wind_el[i] <= wind[i] #wind
         prob += pv_el[i] <= pv[i] #PV
         # prob += elz[i] == wind_el[i] + pv_el[i] + grid_el[i] + bat_out[i] #electrolyzer
@@ -3909,13 +3903,13 @@ def p2g_wwtp3(
             prob += comp_el[i] == (((0.25*h2_use[i]*1000/2.02) / biogas[i,1]) * (biogas[i,0] + biogas[i,1])) * comp_el_factor #electricity required for biogas compression
         elif biogas[i,1] == 0:
             prob += comp_el[i] == 0
-        # defining minimum electrolyzer load
+        # Defining minimum electrolyzer load
         prob += elz[i] >= elz_min * elz_mode[i]
-        # defining maximum electrolyzer load
+        # Defining maximum electrolyzer load
         prob += elz[i] <= elz_max * elz_mode[i]
-        # defining minimum methanation load
+        # Defining minimum methanation load
         prob += h2_use[i] >= meth_min * meth_on[i]
-        # defining maximum methanation load
+        # Defining maximum methanation load
         prob += h2_use[i] <= meth_max * meth_on[i]
 
         # Part-load variable constraints
@@ -3942,7 +3936,7 @@ def p2g_wwtp3(
         # Total electrolyzer load
         prob += elz[i] == e10[i] + e20[i] + e30[i] + e40[i] + \
             e50[i] + e60[i] + e70[i] + e80[i] + e90[i] + e100[i]
-        # Only one part of linearization simultaneously (if not working, test to add an e0 varaible?)
+        # Only one part of linearization simultaneously
         prob += lambda10[i] == elz_mode[i] - lambda20[i] - lambda30[i] - lambda40[i] - \
             lambda50[i] - lambda60[i] - lambda70[i] - \
             lambda80[i] - lambda90[i] - lambda100[i]
@@ -3962,21 +3956,19 @@ def p2g_wwtp3(
         # prob += h2_prod[i] >= h2_prod_real[i] - (100000000*elz_start[i])
         # prob += h2_prod[i] <= h2_prod_real[i] + (100000000*elz_start[i])
         
-        # defining start-up (Baumhof a good source for this)
+        # Defining start-up
         if i > 0:
             # Electrolyzer
             prob += elz_start[i] >= elz_mode[i] - elz_mode[i-1] - elz_standby[i-1]# + elz_stop[i]
-            # Can't start if on or standby during previous hour or on or standby in current hour
+            # Can't start if on or standby during previous hour or on or standby in current hour (not needed)
             # prob += elz_start[i] <= 1 - elz_mode[i-1] - elz_standby[i-1]
             # prob += elz_start[i] <= 1 - elz_off[i] - elz_standby[i]
-            # Can't start without being on
+            # Can't start without being on (not needed)
             # prob += elz_start[i] <= elz_mode[i]
-            #CANNOT GET STARTS AND STOPS TO WORK
-                #BEFORE I HAD SIMPLY ADDED "+ELZ_STOP[I]" TO TOP IN THIS LOOP AND DID NOT HAVE THE ONE JUST ABOVE.
             # Can't go to standby from off or vice versa
             prob += elz_standby[i] <= 1 - elz_off[i-1]
             # prob += elz_off[i] <= 1 - elz_standby[i-1]
-        else:  # considering end of previous day
+        else:  # Considering end of previous day
             if prev_mode == 1:
                 prob += elz_start[i] == 0
             elif prev_mode == 0:
@@ -3991,43 +3983,41 @@ def p2g_wwtp3(
         prob += h2_use[i] <= h2_demand[i]
 
         # Storage charging/discharging
-        if i == 0:  # using previous day storage value for first hour
-            #Hydrogen    
+        if i == 0:  # Using previous day storage value for first hour
+            # Hydrogen    
             prob += h2st[i] == h2_prod[i] - h2_use[i] + h2st_prev
-            #Battery (currently not using grid electricity)
+            # Battery (currently not using grid electricity)
             prob += bat[i] <= ((wind[i] + pv[i] - wind_el[i] - pv_el[i]) * bat_eff) - bat_out[i] + bat_prev
         else:
-            #Hydrogen
+            # Hydrogen
             prob += h2st[i] == h2_prod[i] - h2_use[i] + h2st[i-1]
-            #Battery
+            # Battery
             prob += bat[i] <= ((wind[i] + pv[i] - wind_el[i] - pv_el[i]) * bat_eff) - bat_out[i] + bat[i-1]
         
         # By-product generation
-        #Oxygen
+        # Oxygen
         prob += o2_prod[i] == h2_prod[i] * (32/2.02) * 0.5  # kg of o2 produced
         prob += o2_use[i] <= o2_prod[i]
         prob += o2_use[i] <= o2_demand[i]
         
-        #Heat
+        # Heat
         # prob += elz_heat[i] == elz[i] - (aux_cons*elz_mode[i]) - (h2_prod[i]*39.4)
-        #Electrolyzer heat demand, remove methanation heat (already known from h2_use) (maximum of this heat and zero)
+        # Electrolyzer heat demand, remove methanation heat (already known from h2_use) (maximum of this heat and zero)
         prob += 100000 * ehd[i] >= heat_demand[i] - (h2_use[i] * meth_spec_heat * usable_heat)
         prob += 100000 * (1 - ehd[i]) >= (h2_use[i] * meth_spec_heat * usable_heat) - heat_demand[i]
         prob += elz_heat_demand[i] <= heat_demand[i] - (h2_use[i] * meth_spec_heat * usable_heat) + (100000 * (1 - ehd[i])) 
         prob += elz_heat_demand[i] <= 0 + 100000 * ehd[i]
-        #Input water heat consumption
-        # h2o = ((h2o_cons * h2_prod[i] * 997 / 1000) * (4.18/3600) * (temp - h2o_temp)) #[kg]*[kWh/kg*K]*[K]
-        #No heat during cold start
+        # No heat during cold start
         prob += elz_heat[i] <= (1-elz_start[i]) * 1000000000
         prob += elz_heat[i] >= 0
-        prob += elz_heat[i] <= elz[i] - (aux_cons*elz_mode[i]) - (h2_prod[i]*39.4) - ((h2o_cons * h2_prod[i] * 997 / 1000) * (4.18/3600) * (temp - h2o_temp))
+        prob += elz_heat[i] <= elz[i] - (aux_cons*elz_mode[i]) - (h2_prod[i]*39.4) - ((h2o_cons * h2_prod[i] * 997 / 1000) * (4.18/3600) * (temp - h2o_temp)) # Input water heat consumption included
         prob += elz_heat[i] >= (elz[i] - (aux_cons*elz_mode[i]) - (h2_prod[i]*39.4)) - (elz_start[i]*1000000000) - ((h2o_cons * h2_prod[i] * 997 / 1000) * (4.18/3600) * (temp - h2o_temp))  
-        #Use limited by both production and demand
+        # Use limited by both production and demand
         prob += heat_use[i] <= usable_heat * elz_heat[i]
         prob += heat_use[i] <= elz_heat_demand[i]
         prob += heat_use[i] >= 0
 
-        # #Seasonal district heat cost
+        # Seasonal district heat cost
         if (i < 1416) or (i >= 8016):
             prob += heat_income[i] == heat_use[i] * heat_value[3] / 1000
         elif (i >= 1416) and (i < 3624):
@@ -4038,16 +4028,16 @@ def p2g_wwtp3(
             prob += heat_income[i] == heat_use[i] * heat_value[2] / 1000
     
     
-    # objective (minimize the electricity cost)
+    # Objective (minimize the electricity cost)
     prob += plp.lpSum([grid_el[i] * grid[i] / 1000 for i in range(len(grid))]) + plp.lpSum([wind_el[i] * wind_cost / 1000 for i in range(len(grid))]) + plp.lpSum([pv_el[i] * pv_cost / 1000 for i in range(len(grid))]) + \
         ((plp.lpSum([h2_demand[i] - h2_use[i] for i in range(len(grid))]))*10000000) + (plp.lpSum([elz_start[i] * elz_startup_time*elz_max*grid[i]/1000 for i in range(len(grid))])) - \
             plp.lpSum([o2_use[i] * (o2_power * grid[i] / 1000) for i in range(len(grid))]) - plp.lpSum([heat_income[i] for i in range(len(grid))])# + \
-    #electricity costs (grid, wind, pv)
-    #oxygen income, and heat income
+    # electricity costs (grid, wind, pv)
+    # oxygen income, and heat income
     
     # Define solver (Gurobi/PuLP)
     solver = plp.GUROBI_CMD()
-    # solver = plp.PULP_CBC_CMD()
+    # solver = plp.PULP_CBC_CMD() # Uncomment to use built-in PuLP solver
     status = prob.solve(solver)
 
     e_op = []
@@ -4076,9 +4066,7 @@ def p2g_wwtp3(
     h2_produced_start = []
     h2_produced_real = []
 
-    
-
-    # saving variable solutions
+    # Saving variable solutions
     for i in range(len(grid)):
         e_op.append(elz[i].varValue)
         grid_op.append(grid_el[i].varValue)
@@ -4104,10 +4092,9 @@ def p2g_wwtp3(
         c_el.append(comp_el[i].varValue)
         e_h_dem.append(elz_heat_demand[i].varValue)
         h2_produced_start.append(h2_prod_start[i].varValue)
-        h2_produced_real.append(h2_prod_real[i].varValue)
-        
+        h2_produced_real.append(h2_prod_real[i].varValue)   
 
-    h2_missed = list(np.array(h2_demand) - np.array(h2_used))
+    h2_missed = list(np.array(h2_demand) - np.array(h2_used)) # Unmet H2 demand
     demand_vector = h2_demand
     grid_inc = np.array(grid_op) * grid / 1000
     o2_inc = np.array(o_use) * (o2_power * grid[i] / 1000)
